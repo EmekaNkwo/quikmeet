@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { Popover, Tooltip } from 'antd'
 import { BsThreeDotsVertical } from 'react-icons/bs'
 

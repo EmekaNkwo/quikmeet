@@ -8,7 +8,6 @@ import {
   PersonaSize,
   mergeStyleSets,
   mergeStyles,
-  PersonaInitialsColor,
   DefaultButton,
 } from '@fluentui/react'
 import { useCallback, useEffect, useRef, useState } from 'react'
