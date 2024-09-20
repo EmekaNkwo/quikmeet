@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable react-hooks/exhaustive-deps */
 import { FC, ReactNode, useEffect, useMemo, useRef, useState } from 'react'
 import { Modal, ContextualMenu, IDragOptions } from '@fluentui/react'
@@ -24,53 +25,59 @@ export const Media: FC = () => {
     ])
   const { connections } = useRemoteState(state => state)
 
-  const screenItems = useMemo(
-    () =>
-      connections
-        .filter(c => !c.displayStream.empty)
-        .map(c => ({
-          stream: c.displayStream,
-          label: `${userLabel(c)}'s screen`,
-          flip: false,
-        })),
-    [connections],
-  )
+  const screenItems: VideoBoxProps[] = connections
+    .filter(c => !c.displayStream.empty)
+    .map(c => ({
+      stream: c.displayStream,
+      label: `${userLabel(c)}'s screen`,
+      flip: false,
+    }))
 
-  const userItems = useMemo(
-    () =>
-      connections
-        .filter(c => !c.userStream.empty)
-        .map(c => ({
-          stream: c.userStream,
-          label: userLabel(c),
-        })),
-    [connections],
-  )
+  const userItems: VideoBoxProps[] = connections
+    .filter(c => !c.userStream.empty)
+    .map(c => ({
+      stream: c.userStream,
+      label: userLabel(c),
+    }))
 
   const [pinnedItem, setPinnedItem] = useState<VideoBoxProps>()
   const [pinnedScreenItem, setPinnedScreenItem] = useState<VideoBoxProps>()
 
   useEffect(() => {
-    if (screenItems.length > 0) {
-      setPinnedScreenItem(prev =>
-        prev?.stream.id === screenItems[0].stream.id ? prev : screenItems[0],
-      )
-    } else if (
-      userItems.length === 0 &&
-      (!pinnedItem || pinnedItem.stream.id !== userMedia.id)
-    ) {
-      setPinnedItem({
-        muted: true,
-        stream: userMedia,
-        label: 'You',
-        personaText: preferences.userName,
-        noContextualMenu: true,
-      })
+    if (screenItems.length) {
+      if (
+        !pinnedScreenItem ||
+        pinnedScreenItem.stream.id !== screenItems[0].stream.id
+      ) {
+        setPinnedScreenItem(screenItems[0])
+      }
+    } else if (!screenItems.length && !userItems.length) {
+      if (pinnedItem?.stream.id !== userMedia.id) {
+        setPinnedItem({
+          muted: true,
+          stream: userMedia,
+          label: 'You',
+          personaText: preferences.userName,
+          noContextualMenu: true,
+        })
+      }
     } else {
-      setPinnedItem(undefined)
-      setPinnedScreenItem(undefined)
+      if (pinnedItem) {
+        setPinnedItem(undefined)
+      } else if (pinnedScreenItem) {
+        setPinnedScreenItem(undefined)
+      }
     }
-  }, [screenItems, userItems, userMedia, preferences.userName])
+  }, [
+    connections,
+    connections.length,
+    pinnedItem,
+    preferences.userName,
+    screenItems,
+    userMedia,
+    userItems,
+    pinnedScreenItem,
+  ])
 
   useEffect(() => {
     if (!displayStreamActive) {
@@ -83,14 +90,13 @@ export const Media: FC = () => {
       connections.length > 0
         ? [
             ...connections.map(connection => ({
-              muted: false,
               stream: connection.userStream,
               label: userLabel(connection),
               personaText: connection.userName,
               noContextualMenu: true,
+              ...connection,
             })),
             {
-              muted: false,
               stream: userMedia,
               label: 'You',
               personaText: preferences.userName,
@@ -102,6 +108,10 @@ export const Media: FC = () => {
   )
 
   const containerRef = useRef<HTMLDivElement>(null)
+
+  const gridItems = screenItems
+    .concat(userItems)
+    .filter(i => i.stream.id !== pinnedItem?.stream.id)
   const {
     pinnedContainerWidth,
     gridContainerWidth,
@@ -110,7 +120,8 @@ export const Media: FC = () => {
   } = useMediaGridSizes({
     container: containerRef.current,
     hasPinnedItem: connections.length > 0 ? !!pinnedScreenItem : !!pinnedItem,
-    gridItems: pinnedItems.length,
+    // gridItems: pinnedItems.length,
+    gridItems: gridItems.length,
   })
 
   const isScreenSharing = !!(pinnedScreenItem && screenItems.length > 0)
@@ -154,7 +165,7 @@ export const Media: FC = () => {
           <VideoBox {...pinnedItem} />
         </div>
       )}
-      {!!pinnedItems.length && (
+      {!!gridItems.length && (
         <div
           style={{
             width: isScreenSharing ? '100%' : gridContainerWidth,
@@ -166,7 +177,7 @@ export const Media: FC = () => {
             style={{ alignContent: isScreenSharing ? 'flex-start' : 'center' }}
             className={classes.gridInner}
           >
-            {pinnedItems.map(props => (
+            {gridItems.map(props => (
               <div
                 style={{
                   width: gridItemWidth - (isScreenSharing ? 150 : 20),
@@ -180,6 +191,7 @@ export const Media: FC = () => {
           </div>
         </div>
       )}
+      <div className={classes.userMediaContainer} id="user-media-container" />
       <div
         className={classes.displayMediaContainer}
         id="display-media-container"

@@ -2,8 +2,6 @@ import { Link, Stack } from '@fluentui/react'
 import { type FC } from 'react'
 import { classes } from './styles'
 import { Container } from '../comps/container'
-
-import { MdConnectWithoutContact } from 'react-icons/md'
 import IconLogo from '../shared/IconComponents/IconLogo'
 
 const Header: FC = ({}) => {
