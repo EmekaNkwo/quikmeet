@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { io } from 'socket.io-client'
 import { create } from 'zustand'
 import {
@@ -15,6 +16,18 @@ import Peer from 'simple-peer'
 import { MAX_BANDWIDTH, MIN_BANDWIDTH } from './constants'
 import { onChatReceived } from './chat'
 import adapter from 'webrtc-adapter'
+
+interface BrowserInfo {
+  isModern: boolean
+  isMobile: boolean
+  isIPhone: boolean
+}
+
+interface Connection {
+  peerInstance: Peer.Instance
+}
+
+const FIREFOX_MIN_VERSION = 64
 
 export const createSocket = () => {
   const serverPort = process.env.REACT_APP_SAME_ORIGIN_SOCKET_PORT
@@ -85,47 +98,121 @@ export const setupLocalMediaListeners = () => {
   })
 }
 
-export const createPeerInstance = (opts: Peer.Options) => {
+// export const createPeerInstance = (opts: Peer.Options) => {
+//   return new Peer({
+//     sdpTransform: function transform(sdp) {
+//       const { connections } = useRemoteState.getState()
+//       const bandwidth =
+//         Math.max(MAX_BANDWIDTH / (connections.length || 1), MIN_BANDWIDTH) >>> 0
+
+//       // In modern browsers, use RTCRtpSender.setParameters to change bandwidth without
+//       // (local) renegotiation. Note that this will be within the envelope of
+//       // the initial maximum bandwidth negotiated via SDP.
+//       if (
+//         (adapter.browserDetails.browser === 'chrome' ||
+//           adapter.browserDetails.browser === 'safari' ||
+//           (adapter.browserDetails.browser === 'firefox' &&
+//             adapter.browserDetails.version &&
+//             adapter.browserDetails.version >= 64)) &&
+//         'RTCRtpSender' in window &&
+//         'setParameters' in window.RTCRtpSender.prototype
+//       ) {
+//         connections.forEach(({ peerInstance }) => {
+//           // USING INTERNAL API OF SIMPLE-PEER HERE, HOPEFULLY IT DOESN'T CHANGE!
+//           const sender = (
+//             peerInstance as unknown as { _pc?: RTCPeerConnection }
+//           )._pc?.getSenders()[0]
+//           if (!sender) return
+//           const parameters = sender.getParameters()
+//           if (!parameters.encodings || !parameters.encodings.length) {
+//             return
+//           }
+//           const encoding = parameters.encodings[0]
+//           if (encoding.maxBitrate !== bandwidth * 1000) {
+//             encoding.maxBitrate = bandwidth * 1000
+//             sender.setParameters(parameters)
+//           }
+//         })
+
+//         return sdp
+//       }
+
+//       // Fallback to the SDP changes with local renegotiation as way of limiting
+//       // the bandwidth.
+//       return transformSdp(sdp, bandwidth, this)
+//     },
+//     ...opts,
+//   })
+// }
+
+function calculateBandwidth(connectionCount: number): number {
+  return Math.max(MAX_BANDWIDTH / (connectionCount || 1), MIN_BANDWIDTH) >>> 0
+}
+
+function getBrowserInfo(): BrowserInfo {
+  const { browser, version } = adapter.browserDetails
+  const isModernBrowser =
+    (browser === 'chrome' ||
+      browser === 'safari' ||
+      (browser === 'firefox' &&
+        version != null &&
+        version >= FIREFOX_MIN_VERSION)) &&
+    'RTCRtpSender' in window &&
+    'setParameters' in RTCRtpSender.prototype
+
+  const isMobile = /Mobi|Android/i.test(navigator.userAgent)
+  const isIPhone = /iPhone/i.test(navigator.userAgent)
+
+  return { isModern: isModernBrowser, isMobile, isIPhone }
+}
+
+function applyBandwidthLimitToSenders(
+  connections: Connection[],
+  bandwidth: number,
+): void {
+  connections.forEach(({ peerInstance }) => {
+    const pc = (peerInstance as any).pc as RTCPeerConnection | undefined
+    const sender = pc?.getSenders()[0]
+    if (!sender) return
+
+    const parameters = sender.getParameters()
+    if (!parameters.encodings || !parameters.encodings.length) return
+
+    const encoding = parameters.encodings[0]
+    if (encoding.maxBitrate !== bandwidth * 1000) {
+      encoding.maxBitrate = bandwidth * 1000
+      sender.setParameters(parameters).catch(error => {
+        console.error('Error setting bandwidth parameter:', error)
+      })
+    }
+  })
+}
+
+function applyIPhoneSpecificTransforms(sdp: string): string {
+  // This is a placeholder implementation
+  return sdp.replace(
+    /(a=fmtp:\d+ .*)\r\n/g,
+    '$1;x-google-max-bitrate=2000000\r\n',
+  )
+}
+
+export const createPeerInstance = (opts: Peer.Options): Peer.Instance => {
   return new Peer({
-    sdpTransform: function transform(sdp) {
+    sdpTransform: function transform(sdp: string): string {
       const { connections } = useRemoteState.getState()
-      const bandwidth =
-        Math.max(MAX_BANDWIDTH / (connections.length || 1), MIN_BANDWIDTH) >>> 0
+      const bandwidth = calculateBandwidth(connections.length)
+      const browserInfo = getBrowserInfo()
 
-      // In modern browsers, use RTCRtpSender.setParameters to change bandwidth without
-      // (local) renegotiation. Note that this will be within the envelope of
-      // the initial maximum bandwidth negotiated via SDP.
-      if (
-        (adapter.browserDetails.browser === 'chrome' ||
-          adapter.browserDetails.browser === 'safari' ||
-          (adapter.browserDetails.browser === 'firefox' &&
-            adapter.browserDetails.version &&
-            adapter.browserDetails.version >= 64)) &&
-        'RTCRtpSender' in window &&
-        'setParameters' in window.RTCRtpSender.prototype
-      ) {
-        connections.forEach(({ peerInstance }) => {
-          // USING INTERNAL API OF SIMPLE-PEER HERE, HOPEFULLY IT DOESN'T CHANGE!
-          const sender = (
-            peerInstance as unknown as { _pc?: RTCPeerConnection }
-          )._pc?.getSenders()[0]
-          if (!sender) return
-          const parameters = sender.getParameters()
-          if (!parameters.encodings || !parameters.encodings.length) {
-            return
-          }
-          const encoding = parameters.encodings[0]
-          if (encoding.maxBitrate !== bandwidth * 1000) {
-            encoding.maxBitrate = bandwidth * 1000
-            sender.setParameters(parameters)
-          }
-        })
-
+      if (browserInfo.isModern && !browserInfo.isMobile) {
+        applyBandwidthLimitToSenders(connections, bandwidth)
         return sdp
       }
 
-      // Fallback to the SDP changes with local renegotiation as way of limiting
-      // the bandwidth.
+      if (browserInfo.isIPhone) {
+        sdp = applyIPhoneSpecificTransforms(sdp)
+      }
+
+      // Fallback for older browsers and mobile devices
       return transformSdp(sdp, bandwidth, this)
     },
     ...opts,
@@ -145,10 +232,18 @@ export const createRemoteConnection = ({
   }
 
   const state = useRemoteState.getState()
-  if (state.connections.find(c => c.userId === userId)) {
-    throw new Error(
-      `createRemoteConnection: connection with user ${userId} already exists`,
-    )
+  // if (state.connections.find(c => c.userId === userId)) {
+  //   throw new Error(
+  //     `createRemoteConnection: connection with user ${userId} already exists`,
+  //   )
+  // }
+
+  if (state.connections.some(c => c.userId === userId)) {
+    toast(`Connection with user ${userId} already exists.`, {
+      type: ToastType.warning,
+      autoClose: Timeout.SHORT,
+    })
+    return
   }
   const { socket } = state
   // eslint-disable-next-line @typescript-eslint/no-non-null-asserted-optional-chain
@@ -156,6 +251,14 @@ export const createRemoteConnection = ({
   const localState = useLocalState.getState()
   const { userName: nameSelf } = localState.preferences
   const { userStream, displayStream } = localState
+
+  if (!roomId) {
+    toast('No active room found.', {
+      type: ToastType.error,
+      autoClose: Timeout.SHORT,
+    })
+    return
+  }
 
   const peer = createPeerInstance({
     initiator,
@@ -171,25 +274,18 @@ export const createRemoteConnection = ({
   }
 
   const reRenderConnection = () =>
-    useRemoteState.setState(state => {
-      return {
-        connections: state.connections.map(c => {
-          if (c.userId === userId) {
-            return {
-              ...c,
-            }
-          }
-          return c
-        }),
-      }
-    })
+    useRemoteState.setState(state => ({
+      connections: state.connections.map(c =>
+        c.userId === userId ? { ...c } : c,
+      ),
+    }))
 
   userStream.getTracks().forEach(track => {
     debug('adding track to the peer', track, connection)
     peer.addTrack(track, connection.userStream)
   })
   displayStream.getTracks().forEach(track => {
-    debug('adding display track t the  peer', track, connection)
+    debug('adding display track to the  peer', track, connection)
     peer.addTrack(track, connection.displayStream)
   })
 

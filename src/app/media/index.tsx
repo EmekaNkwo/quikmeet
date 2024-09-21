@@ -94,7 +94,7 @@ export const Media: FC = () => {
               label: userLabel(connection),
               personaText: connection.userName,
               noContextualMenu: true,
-              ...connection,
+              // ...connection,
             })),
             {
               stream: userMedia,
@@ -139,8 +139,7 @@ export const Media: FC = () => {
     </Modal>
   )
 
-  console.log(gridItemWidth)
-  console.log(gridItemHeight)
+  console.log(pinnedScreenItem)
 
   return (
     <div
@@ -173,8 +172,8 @@ export const Media: FC = () => {
             width: isScreenSharing ? '100%' : gridContainerWidth,
             height: isScreenSharing ? 200 : '100%',
           }}
-          // className={classes.gridContainer}
-          className="grid grid-flow-row gap-4 "
+          className={classes.gridContainer}
+          // className="grid grid-flow-row gap-4"
         >
           <div
             style={{ alignContent: isScreenSharing ? 'flex-start' : 'center' }}
