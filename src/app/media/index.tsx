@@ -94,7 +94,7 @@ export const Media: FC = () => {
               label: userLabel(connection),
               personaText: connection.userName,
               noContextualMenu: true,
-              // ...connection,
+              ...connection,
             })),
             {
               stream: userMedia,
