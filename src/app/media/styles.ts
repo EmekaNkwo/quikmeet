@@ -79,8 +79,8 @@ export const classes = mergeStyleSets({
     '@media (max-width: 768px)': {
       width: '100%',
       alignItems: 'center',
-      justifyContent: 'flex-start',
-      flexWrap: 'nowrap',
+      // justifyContent: 'flex-start',
+      flexWrap: 'wrap',
       overflowX: 'auto',
     },
   },
