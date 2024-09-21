@@ -17,16 +17,41 @@ import {
   DoubleSideButton,
   SingleButton,
 } from '../../utils/shared/CustomButtons'
+import { IoShareOutline } from 'react-icons/io5'
 import { IoMdCheckmark, IoMdMic, IoMdMicOff } from 'react-icons/io'
 import { FaRegHand } from 'react-icons/fa6'
 import { FiUsers, FiSettings, FiVideo, FiVideoOff } from 'react-icons/fi'
-import { BsEmojiSmile } from 'react-icons/bs'
+import { BsEmojiSmile, BsThreeDotsVertical } from 'react-icons/bs'
 import {
   MdChatBubbleOutline,
   MdOutlineLogout,
   MdOutlineStopScreenShare,
 } from 'react-icons/md'
 import IconShareScreen from '../../shared/IconComponents/IconShareScreen'
+import { Popover } from 'antd'
+
+const MenuItem = ({
+  icon,
+  label,
+  count,
+  onClick,
+}: {
+  icon: JSX.Element
+  label: string
+  count?: number
+  onClick?: () => void
+}) => (
+  <div
+    className="flex items-center gap-2 cursor-pointer hover:bg-slate-100 p-[2px] hover:text-blue-600"
+    onClick={onClick}
+  >
+    {icon}
+    <span>
+      {count ? `${count} ` : ''}
+      {label}
+    </span>
+  </div>
+)
 
 const MyCommandBar: FC = () => {
   // const { setColorScheme, colorScheme } = useContext(ColorSchemeContext)
@@ -227,7 +252,50 @@ const MyCommandBar: FC = () => {
             disabled={mediaBtnsDisabled}
           />
         </div>
-        <div className="flex gap-3 items-center">
+        <div className="lg:hidden flex items-center gap-2">
+          <DoubleSideButton
+            danger
+            icon={<MdOutlineLogout className="rotate-180" />}
+            leftOnClick={handleLeaveRoom}
+          />
+          <Popover
+            placement="leftTop"
+            content={
+              <div className="flex gap-3 flex-col">
+                <div className="flex flex-col gap-3">
+                  <MenuItem
+                    icon={
+                      displayStreamActive ? (
+                        <MdOutlineStopScreenShare size={20} color="red" />
+                      ) : (
+                        <IoShareOutline size={20} />
+                      )
+                    }
+                    onClick={() => {
+                      if (!displayStreamActive) {
+                        startScreen()
+                      } else {
+                        stopScreen()
+                      }
+                    }}
+                    label="Share screen"
+                  />
+                  <MenuItem icon={<FaRegHand size={18} />} label="Raise hand" />
+                  <MenuItem icon={<BsEmojiSmile size={18} />} label="Emoji" />
+                </div>
+              </div>
+            }
+            title=""
+            trigger="click"
+          >
+            <SingleButton
+              icon={<BsThreeDotsVertical />}
+              className="cursor-pointer"
+            />
+          </Popover>
+        </div>
+
+        <div className="gap-3 items-center lg:flex hidden">
           <DoubleSideButton
             icon={
               displayStreamActive ? (
@@ -260,9 +328,37 @@ const MyCommandBar: FC = () => {
             leftOnClick={handleLeaveRoom}
           />
         </div>
-        <div className="flex gap-3 items-center">
-          <SingleButton icon={<MdChatBubbleOutline />} />
+
+        {/* Mobile View for Right Side */}
+        <div className="lg:hidden">
+          <Popover
+            placement="leftTop"
+            content={
+              <div className="flex gap-3 flex-col">
+                <div className="flex flex-col gap-3">
+                  <MenuItem
+                    icon={<FiUsers />}
+                    label="Users"
+                    count={totalUsers}
+                  />
+                  <MenuItem icon={<MdChatBubbleOutline />} label="Chat" />
+                  <MenuItem icon={<FiSettings />} label="Settings" />
+                </div>
+              </div>
+            }
+            title=""
+            trigger="click"
+          >
+            <SingleButton
+              icon={<BsThreeDotsVertical />}
+              className="cursor-pointer"
+            />
+          </Popover>
+        </div>
+        <div className="gap-3 items-center lg:flex hidden">
           <SingleButton icon={<FiUsers />} count={totalUsers} />
+
+          <SingleButton icon={<MdChatBubbleOutline />} />
           <SingleButton icon={<FiSettings />} />
         </div>
       </div>

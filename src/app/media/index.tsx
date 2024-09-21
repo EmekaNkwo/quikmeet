@@ -120,8 +120,8 @@ export const Media: FC = () => {
   } = useMediaGridSizes({
     container: containerRef.current,
     hasPinnedItem: connections.length > 0 ? !!pinnedScreenItem : !!pinnedItem,
-    // gridItems: pinnedItems.length,
-    gridItems: gridItems.length,
+    gridItems: pinnedItems.length,
+    // gridItems: gridItems.length,
   })
 
   const isScreenSharing = !!(pinnedScreenItem && screenItems.length > 0)
@@ -165,7 +165,7 @@ export const Media: FC = () => {
           <VideoBox {...pinnedItem} />
         </div>
       )}
-      {!!gridItems.length && (
+      {!!pinnedItems.length && (
         <div
           style={{
             width: isScreenSharing ? '100%' : gridContainerWidth,
@@ -177,7 +177,7 @@ export const Media: FC = () => {
             style={{ alignContent: isScreenSharing ? 'flex-start' : 'center' }}
             className={classes.gridInner}
           >
-            {gridItems.map(props => (
+            {pinnedItems.map(props => (
               <div
                 style={{
                   width: gridItemWidth - (isScreenSharing ? 150 : 20),
@@ -191,7 +191,7 @@ export const Media: FC = () => {
           </div>
         </div>
       )}
-      <div className={classes.userMediaContainer} id="user-media-container" />
+
       <div
         className={classes.displayMediaContainer}
         id="display-media-container"

@@ -3,7 +3,7 @@ import { Popover, Tooltip } from 'antd'
 import { BsThreeDotsVertical } from 'react-icons/bs'
 
 interface IProps {
-  icon: JSX.Element
+  icon?: JSX.Element
   leftOnClick?: () => void
   rightOnClick?: () => void
   onClick?: () => void
@@ -14,6 +14,7 @@ interface IProps {
   tooltip?: string
   content?: React.ReactNode
   hasPopup?: boolean
+  className?: string
 }
 export const DoubleSideButton: React.FC<IProps> = ({
   icon,
@@ -24,35 +25,38 @@ export const DoubleSideButton: React.FC<IProps> = ({
   tooltip,
   content,
   hasPopup,
+  className,
 }) => (
-  <Tooltip title={tooltip}>
-    <div
-      className={`flex text-[20px] border-[1px] ${
-        danger
-          ? 'border-red-500 bg-[#C74E5B]'
-          : disabled
-          ? ''
-          : 'bg-[#2E3038] border-[#272A31] '
-      } rounded-md `}
-    >
+  <div className={className}>
+    <Tooltip title={tooltip}>
       <div
-        className="p-2 flex-[2] cursor-pointer"
-        onClick={leftOnClick}
-        ref={ref}
+        className={`flex text-[20px] border-[1px] ${
+          danger
+            ? 'border-red-500 bg-[#C74E5B]'
+            : disabled
+            ? ''
+            : 'bg-[#2E3038] border-[#272A31] '
+        } rounded-md `}
       >
-        {icon}
+        <div
+          className="p-2 flex-[2] cursor-pointer"
+          onClick={leftOnClick}
+          ref={ref}
+        >
+          {icon && icon}
+        </div>
+        {hasPopup ? (
+          <Popover content={content} title="" trigger="click">
+            <div
+              className={`border-l-[1px] border-[#272A31]  py-2 px-1 cursor-pointer  flex-1`}
+            >
+              <BsThreeDotsVertical />
+            </div>
+          </Popover>
+        ) : null}
       </div>
-      {hasPopup ? (
-        <Popover content={content} title="" trigger="click">
-          <div
-            className={`border-l-[1px] border-[#272A31]  py-2 px-1 cursor-pointer  flex-1`}
-          >
-            <BsThreeDotsVertical />
-          </div>
-        </Popover>
-      ) : null}
-    </div>
-  </Tooltip>
+    </Tooltip>
+  </div>
 )
 
 export const SingleButton: React.FC<IProps> = ({
@@ -62,23 +66,26 @@ export const SingleButton: React.FC<IProps> = ({
   ref,
   disabled,
   tooltip,
+  className,
 }) => (
-  <Tooltip title={tooltip}>
-    <div
-      className={`flex text-[20px] rounded-md ${
-        disabled
-          ? 'bg-[#e0e0e0] cursor-not-allowed'
-          : ' border-[#272A31] border-[1px]  '
-      }`}
-    >
+  <div className={className}>
+    <Tooltip title={tooltip}>
       <div
-        className={`p-2 cursor-pointer flex items-center gap-3`}
-        onClick={disabled ? undefined : onClick}
-        ref={ref}
+        className={`flex text-[20px] rounded-md ${
+          disabled
+            ? 'bg-[#e0e0e0] cursor-not-allowed'
+            : ' border-[#272A31] border-[1px]  '
+        }`}
       >
-        {icon}
-        {count && <span className="text-[#EFF0FA] text-[14px]">{count}</span>}
+        <div
+          className={`p-2 cursor-pointer flex items-center gap-3`}
+          onClick={disabled ? undefined : onClick}
+          ref={ref}
+        >
+          {icon}
+          {count && <span className="text-[#EFF0FA] text-[14px]">{count}</span>}
+        </div>
       </div>
-    </div>
-  </Tooltip>
+    </Tooltip>
+  </div>
 )
