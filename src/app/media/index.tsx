@@ -121,7 +121,6 @@ export const Media: FC = () => {
     container: containerRef.current,
     hasPinnedItem: connections.length > 0 ? !!pinnedScreenItem : !!pinnedItem,
     gridItems: pinnedItems.length,
-    // gridItems: gridItems.length,
   })
 
   const isScreenSharing = !!(pinnedScreenItem && screenItems.length > 0)
@@ -139,6 +138,9 @@ export const Media: FC = () => {
       {children}
     </Modal>
   )
+
+  console.log(gridItemWidth)
+  console.log(gridItemHeight)
 
   return (
     <div
@@ -171,7 +173,8 @@ export const Media: FC = () => {
             width: isScreenSharing ? '100%' : gridContainerWidth,
             height: isScreenSharing ? 200 : '100%',
           }}
-          className={classes.gridContainer}
+          // className={classes.gridContainer}
+          className="grid grid-flow-row gap-4 "
         >
           <div
             style={{ alignContent: isScreenSharing ? 'flex-start' : 'center' }}

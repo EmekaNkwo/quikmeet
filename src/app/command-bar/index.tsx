@@ -154,7 +154,7 @@ const MyCommandBar: FC = () => {
 
   return (
     <>
-      <div className="p-3 h-[65px] bg-[#000]  flex justify-between items-center">
+      <div className="p-3 h-[65px] bg-[#000] flex justify-between items-center">
         <div
           className="flex gap-3 items-center"
           aria-label="Use Tab key to navigate between commands"
@@ -332,7 +332,6 @@ const MyCommandBar: FC = () => {
         {/* Mobile View for Right Side */}
         <div className="lg:hidden">
           <Popover
-            placement="leftTop"
             content={
               <div className="flex gap-3 flex-col">
                 <div className="flex flex-col gap-3">

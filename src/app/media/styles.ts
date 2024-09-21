@@ -64,7 +64,7 @@ export const classes = mergeStyleSets({
     height: '100%',
     display: 'flex',
     gap: '10px',
-    // flexDirection: 'column',
+
     alignItems: 'center',
     justifyContent: 'center',
     alignContent: 'center',
@@ -79,6 +79,7 @@ export const classes = mergeStyleSets({
     '@media (max-width: 768px)': {
       width: '100%',
       alignItems: 'center',
+      // flexDirection: 'column',
       // justifyContent: 'flex-start',
       flexWrap: 'wrap',
       overflowX: 'auto',
