@@ -1,7 +1,8 @@
+/* eslint-disable @typescript-eslint/no-use-before-define */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable prefer-const */
 /* eslint-disable @typescript-eslint/no-unused-vars */
-import { io, Socket } from 'socket.io-client'
+import { io } from 'socket.io-client'
 import { create } from 'zustand'
 import {
   Stream,
@@ -30,6 +31,8 @@ interface Connection {
 }
 
 const FIREFOX_MIN_VERSION = 64
+const RECONNECTION_TIMEOUT = 5000 // 5 seconds
+const MAX_RECONNECTION_ATTEMPTS = 3
 
 export const createSocket = () => {
   const serverPort = process.env.REACT_APP_SAME_ORIGIN_SOCKET_PORT
@@ -265,20 +268,29 @@ export const createRemoteConnection = ({
   let makingOffer = false
   let ignoreOffer = false
   let isSettingRemoteAnswerPending = false
+  let reconnectionAttempts = 0
+  let reconnectionTimeout: NodeJS.Timeout | null = null
 
-  const peer = createPeerInstance({
-    initiator,
-    config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] },
-  })
+  // const peer = createPeerInstance({
+  //   initiator,
+  //   config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] },
+  // })
 
   // const peer = new RTCPeerConnection({
   //   iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
   // })
 
+  const createPeer = (isInitiator: boolean) =>
+    new Peer({
+      initiator: isInitiator,
+      config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] },
+    })
+
   // const peer = new Peer({
   //   initiator,
   //   config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] },
   // })
+  let peer = createPeer(initiator)
 
   const connection: IConnection = {
     userId,
@@ -296,95 +308,231 @@ export const createRemoteConnection = ({
       ),
     }))
 
-  userStream.getTracks().forEach(track => {
-    debug('adding track to the peer', track, connection)
-    peer.addTrack(track, connection.userStream)
-  })
-  displayStream.getTracks().forEach(track => {
-    debug('adding display track to the  peer', track, connection)
-    peer.addTrack(track, connection.displayStream)
-  })
+  // userStream.getTracks().forEach(track => {
+  //   debug('adding track to the peer', track, connection)
+  //   peer.addTrack(track, connection.userStream)
+  // })
+  // displayStream.getTracks().forEach(track => {
+  //   debug('adding display track to the  peer', track, connection)
+  //   peer.addTrack(track, connection.displayStream)
+  // })
 
-  peer.on('signal', async signal => {
-    if (signal.type === 'offer') {
-      if (!initiator && makingOffer) {
-        // If we're not the initiator and we're already making an offer,
-        // we should ignore this offer to prevent collisions
-        ignoreOffer = true
-        return
-      }
-      makingOffer = true
-    } else if (signal.type === 'answer') {
-      isSettingRemoteAnswerPending = true
-    }
-    state.socket.emit('request:send_mesage', {
-      to: userId,
-      roomId,
-      data: {
-        sdpSignal: signal,
-        metaData: {
-          screenStreamId: connection.displayStream.id,
-          userStreamId: connection.userStream.id,
+  const addTracksToConnection = () => {
+    userStream.getTracks().forEach(track => {
+      debug('adding track to the peer', track, connection)
+      peer.addTrack(track, userStream)
+    })
+    displayStream.getTracks().forEach(track => {
+      debug('adding display track to the peer', track, connection)
+      peer.addTrack(track, displayStream)
+    })
+  }
+
+  const attemptReconnection = () => {
+    if (reconnectionAttempts >= MAX_RECONNECTION_ATTEMPTS) {
+      toast(
+        `Failed to reconnect with ${userLabel(
+          connection,
+        )} after ${MAX_RECONNECTION_ATTEMPTS} attempts.`,
+        {
+          type: ToastType.error,
+          autoClose: Timeout.LONG,
         },
+      )
+      return
+    }
+    reconnectionAttempts++
+    toast(
+      `Attempting to reconnect with ${userLabel(
+        connection,
+      )}. Attempt ${reconnectionAttempts}/${MAX_RECONNECTION_ATTEMPTS}`,
+      {
+        type: ToastType.info,
+        autoClose: Timeout.SHORT,
       },
-    })
-  })
-
-  peer.on('error', err => {
-    console.error('Peer error:', err)
-    toast('Peer connection error', {
-      type: ToastType.blocked,
-      body: err.message,
-      autoClose: Timeout.SHORT,
-    })
-  })
-  peer.on('close', () => {
-    toast('Peer connection closed with ' + userLabel(connection), {
-      type: ToastType.severeWarning,
-      autoClose: Timeout.SHORT,
-    })
-  })
-  peer.on('connect', () => {
-    toast('Peer connection established with ' + userLabel(connection), {
-      type: ToastType.success,
-      autoClose: Timeout.SHORT,
-    })
-  })
-  peer.on('response:mesage', async ({ sdpSignal }) => {
-    if (!peer.destroyed) {
-      peer.signal(sdpSignal)
-    }
-  })
-  peer.on('data', (str: string) => {
-    const data: IPeerData = JSON.parse(str)
-    if (data.chat) {
-      onChatReceived(data.chat)
-    }
-  })
-  peer.on('track', (track, stream) => {
-    debug('Peer track received', track, connection)
-    // Following the assumption that stream id's are preserved across peers
-    // Holds true on following tested browsers: Chrome, Firefox
-    // Not true on following tested browsers: null
-
-    // If the assumption does not hold true, all tracks are considered user media tracks!
-    const metaData = useRemoteState
-      .getState()
-      .connections.find(conn => conn.userId === connection.userId)?.metaData
-    const streamType =
-      stream.id === metaData?.screenStreamId ? 'displayStream' : 'userStream'
-
-    connection[streamType].addTrack(track)
-
-    // cuz no listeners for remote streams
-    reRenderConnection()
-
-    stream.onremovetrack = ({ track }) => {
-      debug('Peer track removed', track, stream)
-      connection[streamType].removeTrack(track)
+    )
+    reconnectionTimeout = setTimeout(() => {
+      peer.destroy()
+      peer = createPeer(initiator)
+      connection.peerInstance = peer
+      setupPeerEvents()
+      addTracksToConnection()
       reRenderConnection()
-    }
-  })
+    }, RECONNECTION_TIMEOUT)
+  }
+
+  const setupPeerEvents = () => {
+    peer.on('signal', async data => {
+      if (data.type === 'offer') {
+        if (!initiator && makingOffer) {
+          ignoreOffer = true
+          return
+        }
+        makingOffer = true
+      } else if (data.type === 'answer') {
+        isSettingRemoteAnswerPending = true
+      }
+
+      socket.emit('request:send_mesage', {
+        to: userId,
+        roomId,
+        data: {
+          sdpSignal: data,
+          metaData: {
+            screenStreamId: connection.displayStream.id,
+            userStreamId: connection.userStream.id,
+          },
+        },
+      })
+    })
+
+    peer.on('connect', () => {
+      toast('Peer connection established with ' + userLabel(connection), {
+        type: ToastType.success,
+        autoClose: Timeout.SHORT,
+      })
+      reconnectionAttempts = 0
+      if (reconnectionTimeout) {
+        clearTimeout(reconnectionTimeout)
+        reconnectionTimeout = null
+      }
+    })
+
+    peer.on('close', () => {
+      toast('Connection closed with ' + userLabel(connection), {
+        type: ToastType.warning,
+        autoClose: Timeout.SHORT,
+      })
+      attemptReconnection()
+    })
+
+    peer.on('error', err => {
+      console.error('Peer error:', err)
+      toast('Peer connection error', {
+        type: ToastType.blocked,
+        body: err.message,
+        autoClose: Timeout.MEDIUM,
+      })
+      attemptReconnection()
+    })
+
+    peer.on('track', (track, stream) => {
+      debug('Peer track received', track, connection)
+      const metaData = useRemoteState
+        .getState()
+        .connections.find(conn => conn.userId === connection.userId)?.metaData
+      const streamType =
+        stream.id === metaData?.screenStreamId ? 'displayStream' : 'userStream'
+
+      connection[streamType].addTrack(track)
+      reRenderConnection()
+
+      stream.onremovetrack = ({ track }) => {
+        debug('Peer track removed', track, stream)
+        connection[streamType].removeTrack(track)
+        reRenderConnection()
+      }
+    })
+
+    peer.on('data', (str: string) => {
+      const data: IPeerData = JSON.parse(str)
+      if (data.chat) {
+        onChatReceived(data.chat)
+      }
+    })
+  }
+
+  setupPeerEvents()
+  addTracksToConnection()
+
+  // peer.on('signal', async signal => {
+  //   if (signal.type === 'offer') {
+  //     if (!initiator && makingOffer) {
+  //       // If we're not the initiator and we're already making an offer,
+  //       // we should ignore this offer to prevent collisions
+  //       ignoreOffer = true
+  //       return
+  //     }
+  //     makingOffer = true
+  //   } else if (signal.type === 'answer') {
+  //     isSettingRemoteAnswerPending = true
+  //   }
+  //   state.socket.emit('request:send_mesage', {
+  //     to: userId,
+  //     roomId,
+  //     data: {
+  //       sdpSignal: signal,
+  //       metaData: {
+  //         screenStreamId: connection.displayStream.id,
+  //         userStreamId: connection.userStream.id,
+  //       },
+  //     },
+  //   })
+  // })
+
+  //  peer.on('close', () => {
+  //     toast('Connection closed with ' + userLabel(connection), {
+  //       type: ToastType.warning,
+  //       autoClose: Timeout.SHORT,
+  //     })
+  //     attemptReconnection()
+  //   })
+
+  // peer.on('error', err => {
+  //   console.error('Peer error:', err)
+  //   toast('Peer connection error', {
+  //     type: ToastType.blocked,
+  //     body: err.message,
+  //     autoClose: Timeout.SHORT,
+  //   })
+  // })
+  // peer.on('close', () => {
+  //   toast('Peer connection closed with ' + userLabel(connection), {
+  //     type: ToastType.severeWarning,
+  //     autoClose: Timeout.SHORT,
+  //   })
+  // })
+  // peer.on('connect', () => {
+  //   toast('Peer connection established with ' + userLabel(connection), {
+  //     type: ToastType.success,
+  //     autoClose: Timeout.SHORT,
+  //   })
+  // })
+  // peer.on('response:mesage', async ({ sdpSignal }) => {
+  //   if (!peer.destroyed) {
+  //     peer.signal(sdpSignal)
+  //   }
+  // })
+  // peer.on('data', (str: string) => {
+  //   const data: IPeerData = JSON.parse(str)
+  //   if (data.chat) {
+  //     onChatReceived(data.chat)
+  //   }
+  // })
+  // peer.on('track', (track, stream) => {
+  //   debug('Peer track received', track, connection)
+  //   // Following the assumption that stream id's are preserved across peers
+  //   // Holds true on following tested browsers: Chrome, Firefox
+  //   // Not true on following tested browsers: null
+
+  //   // If the assumption does not hold true, all tracks are considered user media tracks!
+  //   const metaData = useRemoteState
+  //     .getState()
+  //     .connections.find(conn => conn.userId === connection.userId)?.metaData
+  //   const streamType =
+  //     stream.id === metaData?.screenStreamId ? 'displayStream' : 'userStream'
+
+  //   connection[streamType].addTrack(track)
+
+  //   // cuz no listeners for remote streams
+  //   reRenderConnection()
+
+  //   stream.onremovetrack = ({ track }) => {
+  //     debug('Peer track removed', track, stream)
+  //     connection[streamType].removeTrack(track)
+  //     reRenderConnection()
+  //   }
+  // })
 
   // socket.on('message', async ({ data }) => {
   //   try {
@@ -432,6 +580,8 @@ export const createRemoteConnection = ({
   useRemoteState.setState(state => ({
     connections: [...state.connections, connection],
   }))
+
+  return connection
 }
 
 export const destroyRemoteConnection = (connection: IConnection) => {
