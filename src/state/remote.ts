@@ -221,30 +221,6 @@ export const createPeerInstance = (opts: Peer.Options): Peer.Instance => {
   })
 }
 
-const handlePeerError = (err: Error, roomId: string, socket: Socket) => {
-  let errorMessage = 'Peer connection error'
-
-  if (err.message.includes('ICE')) {
-    errorMessage = 'ICE Candidate error: ' + err.message
-  } else if (err.message.includes('SDP')) {
-    errorMessage = 'SDP Misconfiguration: ' + err.message
-  } else if (err.message.includes('resource limits')) {
-    errorMessage = 'Resource limits reached: ' + err.message
-  } else if (err.message.includes('network')) {
-    errorMessage = 'Network issue: ' + err.message
-  }
-
-  toast(errorMessage, {
-    type: ToastType.blocked,
-    autoClose: Timeout.MEDIUM,
-  })
-  console.error(err)
-
-  if (roomId) {
-    socket.emit('request:leave_room', { roomId })
-  }
-}
-
 export const createRemoteConnection = ({
   initiator,
   userId,
@@ -288,8 +264,7 @@ export const createRemoteConnection = ({
 
   let makingOffer = false
   let ignoreOffer = false
-  // let isSettingRemoteAnswerPending = false
-  let polite = !initiator
+  let isSettingRemoteAnswerPending = false
 
   const peer = createPeerInstance({
     initiator,
@@ -331,21 +306,17 @@ export const createRemoteConnection = ({
   })
 
   peer.on('signal', async signal => {
-    const readyForOffer = !makingOffer
-    const offerCollision = signal.type === 'offer' && !readyForOffer
-    ignoreOffer = !polite && offerCollision
-    if (ignoreOffer) return
-    // if (signal.type === 'offer') {
-    //   if (!initiator && makingOffer) {
-    //     // If we're not the initiator and we're already making an offer,
-    //     // we should ignore this offer to prevent collisions
-    //     ignoreOffer = true
-    //     return
-    //   }
-    //   makingOffer = true
-    // } else if (signal.type === 'answer') {
-    //   isSettingRemoteAnswerPending = true
-    // }
+    if (signal.type === 'offer') {
+      if (!initiator && makingOffer) {
+        // If we're not the initiator and we're already making an offer,
+        // we should ignore this offer to prevent collisions
+        ignoreOffer = true
+        return
+      }
+      makingOffer = true
+    } else if (signal.type === 'answer') {
+      isSettingRemoteAnswerPending = true
+    }
     state.socket.emit('request:send_mesage', {
       to: userId,
       roomId,
@@ -358,8 +329,14 @@ export const createRemoteConnection = ({
       },
     })
   })
+
   peer.on('error', err => {
-    handlePeerError(err, roomId, socket)
+    console.error('Peer error:', err)
+    toast('Peer connection error', {
+      type: ToastType.blocked,
+      body: err.message,
+      autoClose: Timeout.SHORT,
+    })
   })
   peer.on('close', () => {
     toast('Peer connection closed with ' + userLabel(connection), {
