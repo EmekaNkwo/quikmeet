@@ -27,6 +27,7 @@ export const classes = mergeStyleSets({
 
     '@media (max-width: 768px)': {
       flexDirection: 'column',
+      height: '88vh',
     },
   },
   containerWithScreenShare: {
@@ -80,7 +81,7 @@ export const classes = mergeStyleSets({
       width: '100%',
       alignItems: 'center',
       flexDirection: 'column',
-      justifyContent: 'flex-start',
+      // justifyContent: 'flex-start',
       flexWrap: 'wrap',
       overflowX: 'auto',
     },

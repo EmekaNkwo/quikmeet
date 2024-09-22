@@ -17,7 +17,7 @@ export const useMediaGridSizes = ({
 
     // Calculate the width for the pinned container
     const pinnedContainerWidth = hasPinnedItem
-      ? Math.max(370, Math.min(containerWidth * 0.6, MAX_MEDIA_WIDTH))
+      ? Math.max(540, Math.min(containerWidth * 0.6, MAX_MEDIA_WIDTH))
       : 0 // Set to 0 if no pinned item
 
     const pinnedContainerHeight = isDesktop

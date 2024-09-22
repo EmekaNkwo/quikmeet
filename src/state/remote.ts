@@ -1,5 +1,6 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-import { io } from 'socket.io-client'
+/* eslint-disable prefer-const */
+/* eslint-disable @typescript-eslint/no-unused-vars */
+import { io, Socket } from 'socket.io-client'
 import { create } from 'zustand'
 import {
   Stream,
@@ -219,6 +220,30 @@ export const createPeerInstance = (opts: Peer.Options): Peer.Instance => {
   })
 }
 
+const handlePeerError = (err: Error, roomId: string, socket: Socket) => {
+  let errorMessage = 'Peer connection error'
+
+  if (err.message.includes('ICE')) {
+    errorMessage = 'ICE Candidate error: ' + err.message
+  } else if (err.message.includes('SDP')) {
+    errorMessage = 'SDP Misconfiguration: ' + err.message
+  } else if (err.message.includes('resource limits')) {
+    errorMessage = 'Resource limits reached: ' + err.message
+  } else if (err.message.includes('network')) {
+    errorMessage = 'Network issue: ' + err.message
+  }
+
+  toast(errorMessage, {
+    type: ToastType.blocked,
+    autoClose: Timeout.MEDIUM,
+  })
+  console.error(err)
+
+  if (roomId) {
+    socket.emit('request:leave_room', { roomId })
+  }
+}
+
 export const createRemoteConnection = ({
   initiator,
   userId,
@@ -260,9 +285,24 @@ export const createRemoteConnection = ({
     return
   }
 
+  let makingOffer = false
+  let ignoreOffer = false
+  // let isSettingRemoteAnswerPending = false
+  let polite = !initiator
+
   const peer = createPeerInstance({
     initiator,
+    config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] },
   })
+
+  // const peer = new RTCPeerConnection({
+  //   iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+  // })
+
+  // const peer = new Peer({
+  //   initiator,
+  //   config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] },
+  // })
 
   const connection: IConnection = {
     userId,
@@ -289,12 +329,27 @@ export const createRemoteConnection = ({
     peer.addTrack(track, connection.displayStream)
   })
 
-  peer.on('signal', sdpSignal => {
+  peer.on('signal', async signal => {
+    const readyForOffer = !makingOffer
+    const offerCollision = signal.type === 'offer' && !readyForOffer
+    ignoreOffer = !polite && offerCollision
+    if (ignoreOffer) return
+    // if (signal.type === 'offer') {
+    //   if (!initiator && makingOffer) {
+    //     // If we're not the initiator and we're already making an offer,
+    //     // we should ignore this offer to prevent collisions
+    //     ignoreOffer = true
+    //     return
+    //   }
+    //   makingOffer = true
+    // } else if (signal.type === 'answer') {
+    //   isSettingRemoteAnswerPending = true
+    // }
     state.socket.emit('request:send_mesage', {
       to: userId,
       roomId,
       data: {
-        sdpSignal,
+        sdpSignal: signal,
         metaData: {
           screenStreamId: connection.displayStream.id,
           userStreamId: connection.userStream.id,
@@ -303,17 +358,7 @@ export const createRemoteConnection = ({
     })
   })
   peer.on('error', err => {
-    toast('Peer connection error', {
-      type: ToastType.blocked,
-      body: err.message,
-      autoClose: Timeout.MEDIUM,
-    })
-    console.error(err)
-
-    socket.emit('request:leave_room', {
-      // eslint-disable-next-line @typescript-eslint/no-non-null-asserted-optional-chain
-      roomId,
-    })
+    handlePeerError(err, roomId, socket)
   })
   peer.on('close', () => {
     toast('Peer connection closed with ' + userLabel(connection), {
@@ -326,6 +371,11 @@ export const createRemoteConnection = ({
       type: ToastType.success,
       autoClose: Timeout.SHORT,
     })
+  })
+  peer.on('response:mesage', async ({ sdpSignal }) => {
+    if (!peer.destroyed) {
+      peer.signal(sdpSignal)
+    }
   })
   peer.on('data', (str: string) => {
     const data: IPeerData = JSON.parse(str)
@@ -357,6 +407,38 @@ export const createRemoteConnection = ({
       reRenderConnection()
     }
   })
+
+  // socket.on('message', async ({ data }) => {
+  //   try {
+  //     if (data.sdpSignal) {
+  //       if (data.sdpSignal.type === 'offer') {
+  //         if (!initiator && makingOffer) {
+  //           // If we're not the initiator and we're making an offer,
+  //           // compare IDs to determine who should proceed
+  //           const shouldIgnore = userId > localState.userId
+  //           if (shouldIgnore) {
+  //             ignoreOffer = true
+  //             return
+  //           }
+  //         }
+  //       }
+
+  //       if (!ignoreOffer) {
+  //         await peer.signal(data.sdpSignal)
+  //       }
+
+  //       if (data.sdpSignal.type === 'answer') {
+  //         isSettingRemoteAnswerPending = false
+  //       }
+
+  //       if (data.sdpSignal.type === 'offer') {
+  //         makingOffer = false
+  //       }
+  //     }
+  //   } catch (err) {
+  //     console.error(err)
+  //   }
+  // })
 
   if (!initiator) {
     socket.emit('request:send_mesage', {

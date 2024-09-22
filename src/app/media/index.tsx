@@ -139,8 +139,6 @@ export const Media: FC = () => {
     </Modal>
   )
 
-  console.log(pinnedScreenItem)
-
   return (
     <div
       ref={containerRef}
